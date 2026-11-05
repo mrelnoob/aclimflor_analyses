@@ -33,8 +33,11 @@ load.metadata_2025 <- function(input.directory, zip.file){ # Loads the metadata 
 }
 
 
-get.metadata_2025 <- function(name, 
-                              data = metadata_2025, # This object is created by the 1st function (cf.
+nfi_metadata_2025 <- load.metadata_2025(here::here("data/"), "export_dataifn_2005_2025.zip")
+
+
+get.NFImetadata_2025 <- function(name, 
+                              data = nfi_metadata_2025, # This object is created by the 1st function (cf.
                               # below).
                               variable=T, units=T, modalities=T, exact.name=T){ # To explore metadata.
   name <- toupper(name) # To convert names to UPPERCASES.
@@ -45,9 +48,9 @@ get.metadata_2025 <- function(name,
   if(exact.name==F){
     output[["variable"]] <- data$variable[grep(pattern = name, x = code)]
   }else if(exact.name==T){
-    output[["variable"]] <- data$variable[name == code]
+    output[["variable"]] <- data$variable[code == name]
   } # If the given name does not match exactly a NFI variable name (code), then nothing is returned
-  # unless if 'exact.name == FALSE'. In the latter case, all partial matches in code are returned.
+  # unless 'exact.name == FALSE'. In the latter case, all partial matches in code are returned.
   
   output[["units"]] <- data$units[donnee %in% output[["variable"]]$code,] # Returns the matching units.
   output[["modalities"]] <- data$modalities[unite %in% output[["units"]]$unite,
@@ -56,29 +59,32 @@ get.metadata_2025 <- function(name,
   
   # Print:
   if(variable==T){
-    print("variables")
+    print("VARIABLES")
     print(output$variable)
+    cat("----------------------------------------------------------------------------------------\n\n")
   }
   if(units==T){
-    print("units")
+    print("UNITS")
     print(output$units)
+    cat("----------------------------------------------------------------------------------------\n\n")
   }
   if(modalities==T){
-    print("modalities")
+    print("MODALITIES")
     print(output$modalities)
+    cat("----------------------------------------------------------------------------------------\n\n")
   }
   
   # Return:
-  return(output)
+  # return(output) # No return, otherwise it will print the whole "output" in addition to the 3 lists
+  # # already printed (cf. above).
 }
 
 
-metadata_2025 <- load.metadata_2025(here::here("data/"), "export_dataifn_2005_2025.zip")
 # metadata_2025 <- load.metadata_2025("C:/Users/pvallet/Documents/MyDrive/Generique/DonneesIFN/Donnees2005_2024/", "export_dataifn_2005_2024.zip")
 
 rm(load.metadata_2025)
 
-# TEST
+# # TEST
 # get.metadata_2025("idp")
 # get.metadata_2025("VEGET")
 # get.metadata_2025("ACCI")

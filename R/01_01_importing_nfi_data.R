@@ -20,12 +20,15 @@
 ##### .. 1.1. General import -------------------------------------------------
 # ---------------------------------------------------------------------------- #
 
-source(here::here("R/imput_metadata_2025.R")) # Function to easily read NFI metadata. 
-get.metadata_2025("DC") # Test of the function.
+### To easily access NFI metadata_______________________________________________
+source(here::here("R/imput_metadata_2025.R"))
+get.NFImetadata_2025("def5") # Function to query NFI metadata (it has several arguments, if needed).
 
+
+### To load NFI datasets________________________________________________________
 zip_file <- here::here("data/export_dataifn_2005_2025.zip")
 
-read_NFI <- function (filename, zipfile) { # Custom function to import NFI files from the ZIP file!
+read.NFIdataset <- function (filename, zipfile) { # Custom function to import NFI files from the ZIP file!
   dt <- tibble::as.tibble(read.table(unz(zipfile, paste0(filename, ".csv")), 
                                              header = TRUE, 
                                              sep = ";", dec = ".", encoding = "UTF-8"))
@@ -38,11 +41,11 @@ read_NFI <- function (filename, zipfile) { # Custom function to import NFI files
   return(dt)
 }
 
-nfi_plots <- read_NFI("PLACETTE", zip_file)
-nfi_flora <- read_NFI("FLORE", zip_file)
-# nfi_trees <- read_NFI("ARBRE", zip_file)
-# nfi_ecology <- read_NFI("ECOLOGIE", zip_file)
-# nfi_covers <- read_NFI("COUVERT", zip_file)
+nfi_plots <- read.NFIdataset("PLACETTE", zip_file)
+nfi_flora <- read.NFIdataset("FLORE", zip_file)
+# nfi_trees <- read.NFIdataset("ARBRE", zip_file)
+# nfi_ecology <- read.NFIdataset("ECOLOGIE", zip_file)
+# nfi_covers <- read.NFIdataset("COUVERT", zip_file)
 
 
 
@@ -108,15 +111,82 @@ length(unique(nfi_flora2$idp)) # Belonging to 31,354 unique plots.
 # ---------------------------------------------------------- #
 ##### __________________________ #####
 # ---------------------------------------------------------------------------- #
-##### .. 2.1. Assigning species name -----------------------------------------
+##### .. 2.1. Extracting the species thermal niche values --------------------
+# ---------------------------------------------------------------------------- #
+# ___________________________________________________________
+### .... 2.1.1. Assigning species names to plant surveys ----
+# ___________________________________________________________
+
+### ...... 2.1.1.1. Importing and filtering TAXREF ---------------------------
+# ============================================================================ #
+
+taxref <- tibble::as.tibble(readr::read_delim(unz(description = here::here("data/TAXREFv13.zip"), 
+                                                    filename = "TAXREFv13.txt")))
+# TaxRef is the official French taxonomic reference database. As NFI data are based on the
+# the 13th version, we also use TaxRef v13.
+taxref |> dplyr::filter(REGNE == "Plantae") |> 
+  dplyr::select(!c(LB_AUTEUR, NOM_COMPLET_HTML, NOM_VERN:URL)) |> 
+  dplyr::mutate(dplyr::across(dplyr::everything(), factor)) -> taxref 
+summary(taxref)
+
+
+
+### ...... 2.1.1.2. Joining species name to floristic observations -----------
+# ============================================================================ #
+
+nfi_flora2$valid_name <- taxref$LB_NOM[match(nfi_flora2$cd_ref, taxref$CD_NOM)] # For each species
+# observed in the NFI data (coded with 'cd_ref'), we assign the official short name ('LB_NOM')
+# associated with the unique TaxRef code ('CD_NOM').
+summary(nfi_flora2) # The 91 missing names (NAs) have 'cd_ref == 190873' which belongs to an
+# unspecified lichen genus (Cladonia, the reindeer lichen). As it doesn't exist in the other
+# databases we'll use, we can ignore it. 
+
+
+nfi_flora2 |> dplyr::filter(is.na(valid_name)) -> tt
+taxref |> dplyr::filter(CD_REF == "190873") -> ttt
+
+
+# taxref |> dplyr::filter( # To search for a string in a given column.
+#   grepl('Betula pendula', LB_NOM)) -> tt
+# taxref |> dplyr::filter( # To search for a string in any column.
+#   dplyr::if_any(.cols = dplyr::everything(), ~ grepl('Bryophytes', .))) -> tt
+
+aaa
+
+
+# _________________________________________________
+### .... XXXXX. Importing and filtering EIVE data ----
+# _________________________________________________
+### IMPORTING EIVE:
+eive <- readr::read_csv2(file = here::here("data/EIVE_dengler2023.csv"), 
+                         col_types = readr::cols(
+                           TaxonConcept = readr::col_factor(),
+                           UUID = readr::col_factor(),
+                           TaxonRank = readr::col_factor(),
+                           AccordingTo = readr::col_factor()))
+summary(eive)
+
+
+eive |> dplyr::filter(grepl(' ×', TaxonConcept)) -> tt
+# × = alt+0215
+
+
+
+
+
+##### __________________________ #####
+# ---------------------------------------------------------------------------- #
+##### .. 2.2. COMPUTING STI -------------------------
 # ---------------------------------------------------------------------------- #
 
 
 
-# DANS IMPUT METADATA (modif pour enluver le / car j'utilise here::here())
 
 
 
+
+########### *-----------------------------------------------------* ############
+############### *********************************************** ################
 ###### TODOLIST§§§ ####
 # (1) On garde d'abord les PLACETTE des années 2020-2025, et critères de sélection déjà validés. CHECK
 # (2) On charge les FLORE et on ne garde que les relevés correspondant aux placettes de (1). CHECK
