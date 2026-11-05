@@ -28,7 +28,8 @@ get.NFImetadata_2025("def5") # Function to query NFI metadata (it has several ar
 ### To load NFI datasets________________________________________________________
 zip_file <- here::here("data/export_dataifn_2005_2025.zip")
 
-read.NFIdataset <- function (filename, zipfile) { # Custom function to import NFI files from the ZIP file!
+read.NFIdataset <- function (filename, zipfile) { # Custom function to import NFI files from the 
+  # ZIP file!
   dt <- tibble::as.tibble(read.table(unz(zipfile, paste0(filename, ".csv")), 
                                              header = TRUE, 
                                              sep = ";", dec = ".", encoding = "UTF-8"))
@@ -113,9 +114,9 @@ length(unique(nfi_flora2$idp)) # Belonging to 31,354 unique plots.
 # ---------------------------------------------------------------------------- #
 ##### .. 2.1. Extracting the species thermal niche values --------------------
 # ---------------------------------------------------------------------------- #
-# ___________________________________________________________
-### .... 2.1.1. Assigning species names to plant surveys ----
-# ___________________________________________________________
+# ____________________________________________________
+### .... 2.1.1. Assigning species names to plants ----
+# ____________________________________________________
 
 ### ...... 2.1.1.1. Importing and filtering TAXREF ---------------------------
 # ============================================================================ #
@@ -137,27 +138,21 @@ summary(taxref)
 nfi_flora2$valid_name <- taxref$LB_NOM[match(nfi_flora2$cd_ref, taxref$CD_NOM)] # For each species
 # observed in the NFI data (coded with 'cd_ref'), we assign the official short name ('LB_NOM')
 # associated with the unique TaxRef code ('CD_NOM').
-summary(nfi_flora2) # The 91 missing names (NAs) have 'cd_ref == 190873' which belongs to an
-# unspecified lichen genus (Cladonia, the reindeer lichen). As it doesn't exist in the other
-# databases we'll use, we can ignore it. 
+summary(nfi_flora2) # There's 91 missing names (NAs).
 
+nfi_flora2 |> dplyr::filter(is.na(valid_name)) |> dplyr::select(cd_ref) # Missing names have 
+# 'cd_ref == 190873' which belongs to an unspecified lichen genus (Cladonia, the reindeer lichen). 
+# As it doesn't exist in the other databases we'll use, we can ignore it. 
 
-nfi_flora2 |> dplyr::filter(is.na(valid_name)) -> tt
-taxref |> dplyr::filter(CD_REF == "190873") -> ttt
-
-
-# taxref |> dplyr::filter( # To search for a string in a given column.
-#   grepl('Betula pendula', LB_NOM)) -> tt
-# taxref |> dplyr::filter( # To search for a string in any column.
-#   dplyr::if_any(.cols = dplyr::everything(), ~ grepl('Bryophytes', .))) -> tt
-
-aaa
 
 
 # _________________________________________________
-### .... XXXXX. Importing and filtering EIVE data ----
+### .... 2.1.2. Pairing with the EIVE database ----
 # _________________________________________________
-### IMPORTING EIVE:
+
+### ...... 2.1.2.1. Importing and cleaning EIVE data -------------------------
+# ============================================================================ #
+
 eive <- readr::read_csv2(file = here::here("data/EIVE_dengler2023.csv"), 
                          col_types = readr::cols(
                            TaxonConcept = readr::col_factor(),
@@ -166,10 +161,19 @@ eive <- readr::read_csv2(file = here::here("data/EIVE_dengler2023.csv"),
                            AccordingTo = readr::col_factor()))
 summary(eive)
 
-
+# The EIVE database doesn't share the same nomenclature than TaxRef for hybrids, so we 
+# have to change it a little. More precisely, EIVE uses the multiplication symbol (× = alt+0215)
+# with usually no space after (but there are many exceptions), while TaxRef uses the regular X
+# symbol with always a space after. 
 eive |> dplyr::filter(grepl(' ×', TaxonConcept)) -> tt
-# × = alt+0215
+nfi_flora2 |> dplyr::filter(grepl(' x', valid_name)) -> ttt
+levels(ttt$valid_name) -> ttt
 
+
+# taxref |> dplyr::filter( # To search for a string in a given column.
+#   grepl('Betula pendula', LB_NOM)) -> tt
+# taxref |> dplyr::filter( # To search for a string in any column.
+#   dplyr::if_any(.cols = dplyr::everything(), ~ grepl('Bryophytes', .))) -> tt
 
 
 
