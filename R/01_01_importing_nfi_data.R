@@ -166,7 +166,7 @@ summary(eive)
 # have to change it a little. More precisely, EIVE uses the multiplication symbol ('×',
 # short-cut is alt+0215) with usually no space after (but there are many exceptions), 
 # while TaxRef uses the regular 'x' symbol with always a space after. 
-eive |> dplyr::filter(grepl(' ×', x = TaxonConcept, ignore.case = T)) -> tt
+eive |> dplyr::filter(grepl(' ×', x = TaxonConcept, ignore.case = T)) -> ttt
 nfi_flora2 |> dplyr::filter(grepl(' x', x = valid_name, ignore.case = T)) |> 
   droplevels() -> ttt
 as.data.frame(levels(ttt$valid_name)) -> ttt
@@ -174,43 +174,58 @@ as.data.frame(levels(ttt$valid_name)) -> ttt
 # So we have to harmonise that:
 eive |> dplyr::mutate(TaxonConcept = 
                       stringr::str_replace_all(TaxonConcept, " ×", " x ")) -> eive
+rm(ttt)
 
 
 
 ### ...... 2.1.2.2. Joining datasets NFI and EIVE datasets -------------------
 # ============================================================================ #
 
-test_join <- dplyr::left_join(x = nfi_flora2, y = eive, 
+ttjoin <- dplyr::left_join(x = nfi_flora2, y = eive, 
                               by = dplyr::join_by(valid_name == TaxonConcept), 
                               keep = T,
                               relationship = "many-to-one") # To tell {dplyr} that each 
 # row in x matches at most 1 row in y (but x is allowed to have many duplicates).
-test_join |> dplyr::select(!c("UUID", "EIVEres-M":"EIVEres-L.n")) -> test_join
+ttjoin |> dplyr::select(!c("UUID", "EIVEres-M":"EIVEres-L.n")) -> ttjoin
 ### PROBLEMS DETECTED:
 # 1) Many NAs. HOW MANY?????
 # 2) We have many NFI obs with only a genus name (so no match ==> NA). HOW MANY???? In %??
-# 3) Some names don't match (e.g. Rubus fruticosus). HOW MANY???
+# 3) Some names don't match (e.g. Rubus fruticosus, Salix atrocinerea). Perhaps because
+# they are aggregate taxa or taxonomically complicated taxa. HOW MANY???
 
 
 ## PB1:
-test_join |> dplyr::filter(is.na(TaxonRank)) |> droplevels() -> test_join_NA
-as.data.frame(levels(test_join_NA$valid_name)) -> test_join_uniqNA
+ttjoin |> dplyr::filter(is.na(TaxonRank)) |> droplevels() -> ttjoin_NA
+as.data.frame(levels(ttjoin_NA$valid_name)) -> ttjoin_NAuniq
 # So ~23% of NFI plant records have no match (NA), because of problems involving 837 taxa.
 # The 5 most current taxa involved are Rubus fruticosus, Quercus robur var. robur, 
 # Polytrichum formosum, Eurhynchium striatum, and Thuidium tamariscinum (3 bryophytes).
 # These 5 species represent ~50000 obs. so 29% of the NA.
 
 ## PB2:
-test_join_NA |> dplyr::filter(grep("abies", x = valid_name, ignore.case = T))
+ttjoin_NA |> dplyr::filter(!(grepl(" ", x = valid_name, ignore.case = T))) |> 
+  droplevels() -> ttjoin_MONO
+as.data.frame(levels(ttjoin_MONO$valid_name)) -> ttjoin_MONOuniq
+# So ~28% of the mismatches are linked to mono-taxon naming (e.g. only genus or family).
+# There are 432 single taxa names. Most of these (94%) have low abundance values (1 or 2).
 
-test_join_NA[!stringr::str_detect(test_join_NA$valid_name, " ")]
-eive |> dplyr::filter(grepl(' ×', x = TaxonConcept, ignore.case = T)) -> tt
+## PB3:
+ttjoin_NA |> dplyr::filter(grepl(" ", x = valid_name, ignore.case = T)) |> 
+  droplevels() -> ttjoin_POLY
+as.data.frame(levels(ttjoin_POLY$valid_name)) -> ttjoin_POLYuniq
 
 
-summary(test_join_NA)
+taxref |> dplyr::filter(CD_REF == '92900') -> crataegus
+taxref |> dplyr::filter(CD_REF == '611221') -> tt
+taxref |> dplyr::filter(grepl("dianthus pungens", x = LB_NOM, ignore.case = T)) -> tt
 
-sum(is.na(ttt$TaxonRank))
-ttt[!stringr::str_detect(ttt, "age")]
+summary(ttjoin_MONO)
+
+#### Donc faire fonction pour IF EIVE == NA, go look dans JOIN (LB_NOM == EIVEname, i.e.
+# avec jointure entre TOUS les LB_NOM (pas juste le validé)).
+
+# sum(is.na(ttt$TaxonRank))
+# ttt[!stringr::str_detect(ttt, "age")]
 # [1] "n_aitd" "n_sle"  "n_poly" "n_sero"
 
 
