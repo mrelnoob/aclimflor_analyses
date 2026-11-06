@@ -4,8 +4,8 @@
 ############## *-------------------------------------------------* #############
 # ---------------------------------------------------------------------------- #
 
-# This script contains the code to import and clean the National Forest Inventory (NFI) data
-# used in this study.
+# This script contains the code to import and clean the National Forest Inventory (NFI) 
+# data used in this study.
 
 
 
@@ -22,22 +22,23 @@
 
 ### To easily access NFI metadata_______________________________________________
 source(here::here("R/imput_metadata_2025.R"))
-get.NFImetadata_2025("def5") # Function to query NFI metadata (it has several arguments, if needed).
+get.NFImetadata_2025("def5") # Function to query NFI metadata (it has several arguments, 
+# if needed).
 
 
 ### To load NFI datasets________________________________________________________
 zip_file <- here::here("data/export_dataifn_2005_2025.zip")
 
-read.NFIdataset <- function (filename, zipfile) { # Custom function to import NFI files from the 
-  # ZIP file!
+read.NFIdataset <- function (filename, zipfile) { # Custom function to import NFI files 
+  # from the ZIP file!
   dt <- tibble::as.tibble(read.table(unz(zipfile, paste0(filename, ".csv")), 
                                              header = TRUE, 
                                              sep = ";", dec = ".", encoding = "UTF-8"))
   dt |> dplyr::select(!X) |> # Remove the X variable (error in the importation).
     dplyr::rename_with(tolower) |> # Change column names to lowercases. 
     dplyr::mutate(dplyr::across(where(is.character), factor)) |> 
-    dplyr::mutate(campagne = as.factor(campagne), # These two variables are always present in the
-                  # files, so they can be converted here.
+    dplyr::mutate(campagne = as.factor(campagne), # These two variables are always present 
+                  # in the files, so they can be converted here.
                   idp = as.factor(idp)) -> dt
   return(dt)
 }
@@ -76,10 +77,10 @@ nfi_plots |> dplyr::mutate(
 ### Selecting the 2020-2025 campaign only_______________________________________
 nfi_plots |> dplyr::filter(campagne %in% c("2021", "2022", "2023", "2024", "2025") &
                              visite == 1) -> nfi_plots2
-summary(nfi_plots2) # It yields 31,357 plots. Some IDP (i.e. IDs) start with numbers that do
-# not match the given campaign year (y). Those are plots that were not wooded 5 years ago but now
-# are wooded, and so they have now been sampled (in year y) but are given the IDP for the first
-# part of the campaign (y-5).
+summary(nfi_plots2) # It yields 31,357 plots. Some IDP (i.e. IDs) start with numbers that 
+# do not match the given campaign year (y). Those are plots that were not wooded 5 years 
+# ago but now are wooded, and so they have now been sampled (in year y) but are given the 
+# IDP for the first part of the campaign (y-5).
 
 
 
@@ -121,8 +122,8 @@ length(unique(nfi_flora2$idp)) # Belonging to 31,354 unique plots.
 ### ...... 2.1.1.1. Importing and filtering TAXREF ---------------------------
 # ============================================================================ #
 
-taxref <- tibble::as.tibble(readr::read_delim(unz(description = here::here("data/TAXREFv13.zip"), 
-                                                    filename = "TAXREFv13.txt")))
+taxref <- tibble::as.tibble(readr::read_delim(unz(
+  description = here::here("data/TAXREFv13.zip"), filename = "TAXREFv13.txt")))
 # TaxRef is the official French taxonomic reference database. As NFI data are based on the
 # the 13th version, we also use TaxRef v13.
 taxref |> dplyr::filter(REGNE == "Plantae") |> 
@@ -135,14 +136,14 @@ summary(taxref)
 ### ...... 2.1.1.2. Joining species name to floristic observations -----------
 # ============================================================================ #
 
-nfi_flora2$valid_name <- taxref$LB_NOM[match(nfi_flora2$cd_ref, taxref$CD_NOM)] # For each species
-# observed in the NFI data (coded with 'cd_ref'), we assign the official short name ('LB_NOM')
-# associated with the unique TaxRef code ('CD_NOM').
+nfi_flora2$valid_name <- taxref$LB_NOM[match(nfi_flora2$cd_ref, taxref$CD_NOM)] # For each 
+# species observed in the NFI data (coded with 'cd_ref'), we assign the official short name 
+# ('LB_NOM') associated with the unique TaxRef code ('CD_NOM').
 summary(nfi_flora2) # There's 91 missing names (NAs).
 
-nfi_flora2 |> dplyr::filter(is.na(valid_name)) |> dplyr::select(cd_ref) # Missing names have 
-# 'cd_ref == 190873' which belongs to an unspecified lichen genus (Cladonia, the reindeer lichen). 
-# As it doesn't exist in the other databases we'll use, we can ignore it. 
+nfi_flora2 |> dplyr::filter(is.na(valid_name)) |> dplyr::select(cd_ref) # Missing names 
+# have 'cd_ref == 190873' which belongs to an unspecified lichen genus (Cladonia, the 
+# reindeer lichen). As it doesn't exist in the other databases we'll use, we can ignore it. 
 
 
 
@@ -162,13 +163,61 @@ eive <- readr::read_csv2(file = here::here("data/EIVE_dengler2023.csv"),
 summary(eive)
 
 # The EIVE database doesn't share the same nomenclature than TaxRef for hybrids, so we 
-# have to change it a little. More precisely, EIVE uses the multiplication symbol (× = alt+0215)
-# with usually no space after (but there are many exceptions), while TaxRef uses the regular X
-# symbol with always a space after. 
-eive |> dplyr::filter(grepl(' ×', TaxonConcept)) -> tt
-nfi_flora2 |> dplyr::filter(grepl(' x', valid_name)) -> ttt
-levels(ttt$valid_name) -> ttt
+# have to change it a little. More precisely, EIVE uses the multiplication symbol ('×',
+# short-cut is alt+0215) with usually no space after (but there are many exceptions), 
+# while TaxRef uses the regular 'x' symbol with always a space after. 
+eive |> dplyr::filter(grepl(' ×', x = TaxonConcept, ignore.case = T)) -> tt
+nfi_flora2 |> dplyr::filter(grepl(' x', x = valid_name, ignore.case = T)) |> 
+  droplevels() -> ttt
+as.data.frame(levels(ttt$valid_name)) -> ttt
 
+# So we have to harmonise that:
+eive |> dplyr::mutate(TaxonConcept = 
+                      stringr::str_replace_all(TaxonConcept, " ×", " x ")) -> eive
+
+
+
+### ...... 2.1.2.2. Joining datasets NFI and EIVE datasets -------------------
+# ============================================================================ #
+
+test_join <- dplyr::left_join(x = nfi_flora2, y = eive, 
+                              by = dplyr::join_by(valid_name == TaxonConcept), 
+                              keep = T,
+                              relationship = "many-to-one") # To tell {dplyr} that each 
+# row in x matches at most 1 row in y (but x is allowed to have many duplicates).
+test_join |> dplyr::select(!c("UUID", "EIVEres-M":"EIVEres-L.n")) -> test_join
+### PROBLEMS DETECTED:
+# 1) Many NAs. HOW MANY?????
+# 2) We have many NFI obs with only a genus name (so no match ==> NA). HOW MANY???? In %??
+# 3) Some names don't match (e.g. Rubus fruticosus). HOW MANY???
+
+
+## PB1:
+test_join |> dplyr::filter(is.na(TaxonRank)) |> droplevels() -> test_join_NA
+as.data.frame(levels(test_join_NA$valid_name)) -> test_join_uniqNA
+# So ~23% of NFI plant records have no match (NA), because of problems involving 837 taxa.
+# The 5 most current taxa involved are Rubus fruticosus, Quercus robur var. robur, 
+# Polytrichum formosum, Eurhynchium striatum, and Thuidium tamariscinum (3 bryophytes).
+# These 5 species represent ~50000 obs. so 29% of the NA.
+
+## PB2:
+test_join_NA |> dplyr::filter(grep("abies", x = valid_name, ignore.case = T))
+
+test_join_NA[!stringr::str_detect(test_join_NA$valid_name, " ")]
+eive |> dplyr::filter(grepl(' ×', x = TaxonConcept, ignore.case = T)) -> tt
+
+
+summary(test_join_NA)
+
+sum(is.na(ttt$TaxonRank))
+ttt[!stringr::str_detect(ttt, "age")]
+# [1] "n_aitd" "n_sle"  "n_poly" "n_sero"
+
+
+
+ntits <- dplyr::left_join(tits, tpred, by = "id_nestbox",
+                          relationship = "many-to-many") # To tell {dplyr} that rows from
+# one table may match several rows from the other.
 
 # taxref |> dplyr::filter( # To search for a string in a given column.
 #   grepl('Betula pendula', LB_NOM)) -> tt
@@ -192,9 +241,11 @@ levels(ttt$valid_name) -> ttt
 ########### *-----------------------------------------------------* ############
 ############### *********************************************** ################
 ###### TODOLIST§§§ ####
-# (1) On garde d'abord les PLACETTE des années 2020-2025, et critères de sélection déjà validés. CHECK
-# (2) On charge les FLORE et on ne garde que les relevés correspondant aux placettes de (1). CHECK
-# (3) On associe les noms validés TAXREF à chaque taxon de sous-bois.
+# (1) On garde d'abord les PLACETTE des années 2020-2025, et critères de sélection déjà 
+#     validés. CHECK
+# (2) On charge les FLORE et on ne garde que les relevés correspondant aux placettes 
+#     de (1). CHECK
+# (3) On associe les noms validés TAXREF à chaque taxon de sous-bois. CHECK
 # (4) On associe les noms validés EURO+MED PLANTBASE à chaque taxon de sous-bois.
 # (5) On extrait les EIVE pour chaque taxon.
 # (6) On extrait les valeurs CLIMPLANT pour chaque taxon. 
