@@ -126,7 +126,7 @@ taxref <- tibble::as.tibble(readr::read_delim(unz(
   description = here::here("data/TAXREFv13.zip"), filename = "TAXREFv13.txt")))
 # TaxRef is the official French taxonomic reference database. As NFI data are based on the
 # the 13th version, we also use TaxRef v13.
-taxref |> dplyr::filter(REGNE == "Plantae") |> 
+taxref |> dplyr::filter(REGNE == "Plantae" | REGNE == "Fungi") |> 
   dplyr::select(!c(LB_AUTEUR, NOM_COMPLET_HTML, NOM_VERN:URL)) |> 
   dplyr::mutate(dplyr::across(dplyr::everything(), factor)) -> taxref 
 summary(taxref)
@@ -139,11 +139,9 @@ summary(taxref)
 nfi_flora2$valid_name <- taxref$LB_NOM[match(nfi_flora2$cd_ref, taxref$CD_NOM)] # For each 
 # species observed in the NFI data (coded with 'cd_ref'), we assign the official short name 
 # ('LB_NOM') associated with the unique TaxRef code ('CD_NOM').
-summary(nfi_flora2) # There's 91 missing names (NAs).
-
-nfi_flora2 |> dplyr::filter(is.na(valid_name)) |> dplyr::select(cd_ref) # Missing names 
-# have 'cd_ref == 190873' which belongs to an unspecified lichen genus (Cladonia, the 
-# reindeer lichen). As it doesn't exist in the other databases we'll use, we can ignore it. 
+nfi_flora2$inpn_group <- taxref$GROUP2_INPN[match(nfi_flora2$cd_ref, taxref$CD_NOM)]
+summary(nfi_flora2) # There are ~64000 bryophytes and 91 lichens (Cladonia sp., the reindeer 
+# lichen; 'cd_ref == 190873'). 
 
 
 
@@ -186,54 +184,86 @@ ttjoin <- dplyr::left_join(x = nfi_flora2, y = eive,
                               keep = T,
                               relationship = "many-to-one") # To tell {dplyr} that each 
 # row in x matches at most 1 row in y (but x is allowed to have many duplicates).
-ttjoin |> dplyr::select(!c("UUID", "EIVEres-M":"EIVEres-L.n")) -> ttjoin
-### PROBLEMS DETECTED:
-# 1) Many NAs. HOW MANY?????
-# 2) We have many NFI obs with only a genus name (so no match ==> NA). HOW MANY???? In %??
-# 3) Some names don't match (e.g. Rubus fruticosus, Salix atrocinerea). Perhaps because
-# they are aggregate taxa or taxonomically complicated taxa. HOW MANY???
+ttjoin |> dplyr::select(!c("UUID", "EIVEres-M":"EIVEres-L.n")) -> ttjoin # Multiple NAs
+# detected.
 
 
-## PB1:
+## Diagnostic 1: how many NAs (missing names and EIVE values):
 ttjoin |> dplyr::filter(is.na(TaxonRank)) |> droplevels() -> ttjoin_NA
 as.data.frame(levels(ttjoin_NA$valid_name)) -> ttjoin_NAuniq
-# So ~23% of NFI plant records have no match (NA), because of problems involving 837 taxa.
-# The 5 most current taxa involved are Rubus fruticosus, Quercus robur var. robur, 
-# Polytrichum formosum, Eurhynchium striatum, and Thuidium tamariscinum (3 bryophytes).
-# These 5 species represent ~50000 obs. so 29% of the NA.
+# # So ~23% of NFI plant records have no match (NA), because of problems involving 837 taxa.
+# # The 5 most current taxa involved are Rubus fruticosus, Quercus robur var. robur, 
+# # Polytrichum formosum, Eurhynchium striatum, and Thuidium tamariscinum (3 bryophytes).
+# # These 5 species represent ~50000 obs. so 29% of the NA.
+# 
+# ## Diagnostic 2: how many NFI observation with only a family/genus name (monotypes):
+# ttjoin_NA |> dplyr::filter(!(grepl(" ", x = valid_name, ignore.case = T))) |> 
+#   droplevels() -> ttjoin_MONO
+# as.data.frame(levels(ttjoin_MONO$valid_name)) -> ttjoin_MONOuniq
+# # So ~28% of the mismatches are linked to mono-taxon naming (e.g. only genus or family).
+# # There are 432 single taxa names. Most of these (94%) have low abundance values (1 or 2).
+# 
+# ## Diagnostic 2: how many NAs remained linked to other reasons (hybrids, synonyms, aggr.,
+# #  subspecies, varieties):
+# ttjoin_NA |> dplyr::filter(grepl(" ", x = valid_name, ignore.case = T)) |> 
+#   droplevels() -> ttjoin_POLY
+# as.data.frame(levels(ttjoin_POLY$valid_name)) -> ttjoin_POLYuniq
+# 
+# rm(ttjoin, ttjoin_MONO, ttjoin_MONOuniq, ttjoin_NA, ttjoin_NAuniq, ttjoin_POLY, 
+#    ttjoin_POLYuniq, tt)
 
-## PB2:
-ttjoin_NA |> dplyr::filter(!(grepl(" ", x = valid_name, ignore.case = T))) |> 
-  droplevels() -> ttjoin_MONO
-as.data.frame(levels(ttjoin_MONO$valid_name)) -> ttjoin_MONOuniq
-# So ~28% of the mismatches are linked to mono-taxon naming (e.g. only genus or family).
-# There are 432 single taxa names. Most of these (94%) have low abundance values (1 or 2).
-
-## PB3:
-ttjoin_NA |> dplyr::filter(grepl(" ", x = valid_name, ignore.case = T)) |> 
-  droplevels() -> ttjoin_POLY
-as.data.frame(levels(ttjoin_POLY$valid_name)) -> ttjoin_POLYuniq
-
-
-taxref |> dplyr::filter(CD_REF == '92900') -> crataegus
-taxref |> dplyr::filter(CD_REF == '611221') -> tt
-taxref |> dplyr::filter(grepl("dianthus pungens", x = LB_NOM, ignore.case = T)) -> tt
-
-summary(ttjoin_MONO)
-
-#### Donc faire fonction pour IF EIVE == NA, go look dans JOIN (LB_NOM == EIVEname, i.e.
-# avec jointure entre TOUS les LB_NOM (pas juste le validé)).
-
-# sum(is.na(ttt$TaxonRank))
-# ttt[!stringr::str_detect(ttt, "age")]
-# [1] "n_aitd" "n_sle"  "n_poly" "n_sero"
+# #### Donc faire fonction pour IF EIVE == NA, go look dans JOIN (LB_NOM == EIVEname, i.e.
+# # avec jointure entre TOUS les LB_NOM (pas juste le validé)).
 
 
 
-ntits <- dplyr::left_join(tits, tpred, by = "id_nestbox",
-                          relationship = "many-to-many") # To tell {dplyr} that rows from
-# one table may match several rows from the other.
 
+###### TEST WITH {taxify}§§§§§§ #####
+###### TEST WITH {taxify}§§§§§§ #####
+
+
+taxify::install_backbones(backbones = c("col", "gbif", "euromed", "fungorum")) # To install 
+# the {taxify} backbones: Catalogue of Life, GBIF, Euro+Med PlantBase, Species Fungorum Plus.
+
+nfi_flora2$valid_name |> droplevels() |> levels() -> taxref_nfi_names # 2692 taxa.
+
+nfi_taxify <- taxify::taxify(x = taxref_nfi_names, 
+                             backbone = c("euromed", "col", "gbif", "fungorum"), # To force 
+                             # {taxify} to prioritise the matching with Euro+Med PlantBase.
+                             region = "Europe", range = "present")
+summary(nfi_taxify)
+nfi_taxify_anomalies <- taxify::inspect(nfi_taxify) # Gives 191 anomalies, out of which 25 
+# that need reviewing.
+
+## Wrong suggestion: Noccaea montana subsp. montana ==> "Noccaea montana aggr." (EIVE == KEEP).
+## Wrong suggestion: Potentilla erecta subsp. erecta ==> "Potentilla erecta aggr." (EIVE == KEEP).
+## Wrong suggestion: Ranunculus flammula var. reptans ==> "Ranunculus flammula aggr." (EIVE == KEEP).
+## Wrong suggestion: Scrophularia oblongifolia ==> "Scrophularia umbrosa ???" (EIVE unclear).
+# Even in the notes, there are some problems: Rumex acetosella subsp. pyrenaicus.
+# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
+# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
+# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
+# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
+## Wrong suggestion: Astragalus sempervirens subsp. sempervirens ==> "Astragalus sempervirens subsp. sempervirens" (EIVE == KEEP).
+
+# Puis CORRIGER pour faire la VALID_NAME
+
+# 1) Create a VALID_NAME with all unique NFI_flora2 with TAXIFY.
+# 2) Add EIVE + ZANNE on the VALID_NAME
+# 3) Join with NFI flora.
+
+
+
+##### SEARCH CODES #####
+eive |> dplyr::filter(grepl("berberis", x = TaxonConcept, ignore.case = T)) |> 
+  dplyr::select(TaxonConcept, TaxonRank, AccordingTo, 
+                'EIVEres-T', 'EIVEres-T.nw3', 'EIVEres-T.n')
+
+taxref |> dplyr::filter(grepl("Cistus creticus var. eriocephalus", x = LB_NOM, ignore.case = T)) |> 
+  dplyr::select(CD_NOM, CD_TAXSUP, CD_SUP, CD_REF, RANG, LB_NOM)
+taxref |> dplyr::filter(CD_REF == "145597") |> 
+  dplyr::select(CD_NOM, CD_TAXSUP, CD_SUP, CD_REF, RANG, LB_NOM)
+  
 # taxref |> dplyr::filter( # To search for a string in a given column.
 #   grepl('Betula pendula', LB_NOM)) -> tt
 # taxref |> dplyr::filter( # To search for a string in any column.
