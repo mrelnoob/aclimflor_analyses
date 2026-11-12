@@ -233,35 +233,58 @@ nfi_taxify <- taxify::taxify(x = taxref_nfi_names,
                              region = "Europe", range = "present")
 summary(nfi_taxify)
 nfi_taxify_anomalies <- taxify::inspect(nfi_taxify) # Gives 191 anomalies, out of which 25 
-# that need reviewing.
+# that need reviewing, but the notes also need to be checked (rare errors occur).
 
-## Wrong suggestion: Noccaea montana subsp. montana ==> "Noccaea montana aggr." (EIVE == KEEP).
-## Wrong suggestion: Potentilla erecta subsp. erecta ==> "Potentilla erecta aggr." (EIVE == KEEP).
-## Wrong suggestion: Ranunculus flammula var. reptans ==> "Ranunculus flammula aggr." (EIVE == KEEP).
-## Wrong suggestion: Scrophularia oblongifolia ==> "Scrophularia umbrosa ???" (EIVE unclear).
-# Even in the notes, there are some problems: Rumex acetosella subsp. pyrenaicus.
-# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
-# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
-# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
-# =======> CHECK ALL!!!!! *********************** STOP au 57 AFINIR§§§§§§
-## Wrong suggestion: Astragalus sempervirens subsp. sempervirens ==> "Astragalus sempervirens subsp. sempervirens" (EIVE == KEEP).
+# Applying manual corrections for wrongful name resolutions:
+nfi_taxify2 <- nfi_taxify
+nfi_taxify2[nfi_taxify2$input_name == "Noccaea montana subsp. montana", 
+            "accepted_name"] <- "Noccaea montana aggr."
+nfi_taxify2[nfi_taxify2$input_name == "Potentilla erecta subsp. erecta", 
+            "accepted_name"] <- "Potentilla erecta aggr."
+nfi_taxify2[nfi_taxify2$input_name == "Ranunculus flammula var. reptans", 
+            "accepted_name"] <- "Ranunculus flammula aggr."
+nfi_taxify2[nfi_taxify2$input_name == "Scrophularia oblongifolia", 
+            "accepted_name"] <- "Scrophularia umbrosa"
+nfi_taxify2[nfi_taxify2$input_name == "Astragalus sempervirens subsp. sempervirens", 
+            "accepted_name"] <- "Astragalus sempervirens subsp. sempervirens"
+nfi_taxify2[nfi_taxify2$input_name == "Clinopodium nepeta subsp. sylvaticum", 
+            "accepted_name"] <- "Clinopodium menthifolium"
 
-# Puis CORRIGER pour faire la VALID_NAME
 
-# 1) Create a VALID_NAME with all unique NFI_flora2 with TAXIFY.
+### ADDING traits:
+nfi_taxify2 |> taxify::add_zanne() |> taxify::add_eive(cols = "all") -> nfi_taxify2
+
+
+nfi_taxify2 |> dplyr::filter(is.na(eive_temperature)) |> 
+  dplyr::filter(life_form != "moss" &
+                  grepl(" ", x = accepted_name, ignore.case = T)) |>
+  dplyr::select(input_name, matched_name, accepted_name, backbone, 
+                life_form, eive_temperature) -> tt # 603 taxa (with bryophytes and monotypes), 
+# and 90 taxa (without) ==> mostly exotic species. 
+### PB for Aquilegia bernardii (bad synonym) ; Aronia arbutifolia (exotic) ; Baccharis halimifolia
+# (exotic); AFINIR§§§§§§§§ (...) Bufonia perennis (missing in EIVE) ; 
+
+##### FINIR check §§§§§ ----
+##### FINIR check §§§§§ ----
+##### FINIR check §§§§§ ----
+##### FINIR check §§§§§ ----
+
 # 2) Add EIVE + ZANNE on the VALID_NAME
 # 3) Join with NFI flora.
 
 
 
 ##### SEARCH CODES #####
-eive |> dplyr::filter(grepl("berberis", x = TaxonConcept, ignore.case = T)) |> 
+nfi_taxify2 |> dplyr::filter(grepl("Clinopodium", x = input_name, ignore.case = T)) |> 
+  dplyr::select(input_name, matched_name, accepted_name)
+
+eive |> dplyr::filter(grepl("Bufonia", x = TaxonConcept, ignore.case = T)) |> 
   dplyr::select(TaxonConcept, TaxonRank, AccordingTo, 
                 'EIVEres-T', 'EIVEres-T.nw3', 'EIVEres-T.n')
 
-taxref |> dplyr::filter(grepl("Cistus creticus var. eriocephalus", x = LB_NOM, ignore.case = T)) |> 
+taxref |> dplyr::filter(grepl("Pinus nigra var. calabrica", x = LB_NOM, ignore.case = T)) |> 
   dplyr::select(CD_NOM, CD_TAXSUP, CD_SUP, CD_REF, RANG, LB_NOM)
-taxref |> dplyr::filter(CD_REF == "145597") |> 
+taxref |> dplyr::filter(CD_REF == "613561") |> 
   dplyr::select(CD_NOM, CD_TAXSUP, CD_SUP, CD_REF, RANG, LB_NOM)
   
 # taxref |> dplyr::filter( # To search for a string in a given column.
