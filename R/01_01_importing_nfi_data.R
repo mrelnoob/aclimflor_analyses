@@ -268,8 +268,10 @@ nfi_taxify2 |> dplyr::filter(is.na(eive_temperature)) |>
 ##### FINIR check §§§§§ ----
 ##### FINIR check §§§§§ ----
 ##### FINIR check §§§§§ ----
+get.NFImetadata_2025("incid")
 
-# 2) Add EIVE + ZANNE on the VALID_NAME
+# 1) Finish selecting X and plots to work on full data?? (at least for taxonomic harmonisation)?
+# 2) Add EIVE + ZANNE + LEDA (dispersal, clonality...) on the VALID_NAME
 # 3) Join with NFI flora.
 
 
